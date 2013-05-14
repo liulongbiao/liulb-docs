@@ -82,3 +82,112 @@ MongoDB 被设计为不支持多文档事务。
 * 完全内嵌 -- 查询简单，但更新时不仅需要更新自身集合，还需要更新所有所嵌入的其他文档
 * 折中方案 -- 内嵌一系列 `_id` 而不是整个文档
 
+## 多态模式
+
+MongoDB 有时被认为是一个“无模式”数据库，即它不强制集合中文档具备某个特殊结构。
+在一个设计良好的应用中，一个集合会包含相同的或非常相关的结构的文档。
+如果集合中所有的文档都类似，但结构不是完全相同的，我们称其为多态模式。
+
+### 多态模式以支持面向对象编程
+
+关系型数据库要支持继承关系建模：
+* 创建包含所有可能包含字段的联合，但这会浪费大量空间
+* 给每个具体子类创建一个表，但这引入了冗余
+* 创建通用表作为基本内容，join 具体的表。
+
+而在 MongoDB 中我们可以在同一个集合中存储所有类型的文档，且仅存储 *相关的* 字段。
+
+关系型数据库中查询时涉及三相 join，而 MongoDB 中的查询则简单得多。
+
+### 多态模式使模式进化成为可能
+
+关系型数据库中模式进化需精心设计的迁移脚本。
+
+MongoDB 中可以一次性更新所有文档：
+
+	db.nodes.update(
+		{},
+		{$set: { short_description: '' } },
+		false, // upsert
+		true // multi
+		);
+
+但这样在数据量很大时也会影响应用性能。
+
+可选择先在应用层手动处理缺失值
+
+	def get_node_by_url(url):
+		node = db.nodes.find_one({'url': url})
+		node.setdefault('short_description', '')
+		return node
+		
+然后我们可能选择在后台增量迁移集合，如一次 100 个文档：
+
+	def add_short_descriptions():
+		node_ids_to_migrate = db.nodes.find(
+		{'short_description': {'$exists':False}}).limit(100)
+		db.nodes.update(
+		{ '_id': {'$in': node_ids_to_migrate } },
+		{ '$set': { 'short_description': '' } },
+		multi=True)
+		
+全部迁移完成后我们就可以忽略默认值了：
+
+	def get_node_by_url(url):
+		node = db.nodes.find_one({'url': url})
+		return node
+
+#### BSON 存储效率(低效性)
+
+关系型数据库中字段名和类型定义在表级别，而 MongoDB 中字段信息必须被保存在文档中。
+特别的，当你存储小型的值，但使用长的属性名时，实际存储量比关系型数据库中会大很多。
+
+Object-Document Mappers
+
+### 多态模式支持半结构化领域数据
+
+一种方式是可以使用通用的子文档属性 `properties` 来包含可变的字段。
+
+	{
+		_id: ObjectId(...),
+		price: 499.99,
+		title: 'Big and Fast Disk Drive',
+		gb_capacity: 1000,
+		properties: {
+		'Seek Time': '5ms',
+		'Rotational Speed': '15k RPM',
+		'Transfer Rate': '...'
+		... }
+	}
+	
+存储半结构化数据的缺点是难以执行查询及在你希望你的应用不知道的字段上建索引。
+
+另一种可能使用的方式是包含属性-值对的一个数组：
+
+	{
+		_id: ObjectId(...),
+		price: 499.99,
+		title: 'Big and Fast Disk Drive',
+		gb_capacity: 1000,
+		properties: [
+		['Seek Time', '5ms' ],
+		['Rotational Speed', '15k RPM'],
+		['Transfer Rate', '...'],
+		... ]
+	}
+	
+用这种方式，我们可以用下面命令让 MongoDB 在 `properties` 字段上建索引：
+
+	db.products.ensure_index('properties')
+	
+有了索引，我们对指定属性值对的查询如下：
+
+	db.products.find({'properties': [ 'Seek Time': '5ms' ]})
+	
+### 小结
+
+MongoDB 通过不强制集合中所有文档遵循特定模式的灵活性提供了比 RDBMS 一些好处：
+
+* 更好的面向对象继承和多态
+* 模式间更简单的迁移，及更少的应用停机时间
+* 更好的支持半结构化领域数据
