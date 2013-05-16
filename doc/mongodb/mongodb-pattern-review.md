@@ -1501,8 +1501,64 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 ### 元数据和资源管理
 #### 解决方案概览
 #### 模式设计
+
+##### GridFS
 #### 操作
+
+##### 创建并编辑内容节点
+
+	db.cms.nodes.insert({
+		'metadata': {
+			'nonce': ObjectId(),
+			'parent_id': ObjectId(...),
+			'slug': '2012-03-noticed-the-news',
+			'type': 'blog-entry',
+			'title': 'Noticed in the News',
+			'created': datetime.utcnow(),
+			'author': { 'id': user_id, 'name': 'Rick' },
+			'tags': [ 'news', 'musings' ],
+			'detail': {
+				'publish_on': datetime.utcnow(),
+				'text': 'I noticed the news from Washington today…' }
+			}
+		})
+
+这里需要解释一下 `nonce` 字段。`nonce` 是一个设计为仅被使用一次的值。
+通过使用 `nonce` 字段，我们可以检测编辑冲突并给用户机会解决它。
+我们的更新操作如下：
+
+	def update_text(parent_id, slug, nonce, text):
+		result = db.cms.nodes.update(
+			{ 'metadata.parent_id': parent_id,
+				'metadata.slug': slug,
+				'metadata.nonce': nonce },
+			{ '$set':{'metadata.detail.text': text,
+				'metadata.nonce': ObjectId() } },
+			safe=True)
+		if not result['updatedExisting']:
+			raise ConflictError()
+
+我们也可能添加标签到源数据：
+
+	db.cms.nodes.update(
+		{ 'metadata.parent_id': parent_id, 'metadata.slug': slug },
+		{ '$addToSet': { 'tags': { '$each': [ 'interesting', 'funny' ] } } })
+
+##### 上传照片
+
+##### 定位和渲染节点
+
+##### 按标签搜索节点
+
+##### 生成最近发布博客文章动态
+
+	articles = db.nodes.find({
+		'metadata.parent_id': 'my-blog'
+		'metadata.published': { '$lt': datetime.utcnow() } })
+	articles = articles.sort({'metadata.published': -1})
+
 #### 分片考量
+
 ### 存储评论
 #### 方法：每个评论一个文档
 #### 方法：内嵌所有评论
