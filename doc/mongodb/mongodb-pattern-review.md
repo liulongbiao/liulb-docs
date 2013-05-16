@@ -195,7 +195,7 @@ MongoDB 通过不强制集合中所有文档遵循特定模式的灵活性提供
 * 模式间更简单的迁移，及更少的应用停机时间
 * 更好的支持半结构化领域数据
 
-## 模仿事务行为
+## 模仿事务行为 [mimicking-transactional-behavior]
 
 关系型数据库常依赖于原子性多语句事务的存在来确保数据的一致性：
 或者一组语句所有的都成功，或者都失败，将数据库从一个自一致状态转换到另外一个。
@@ -204,7 +204,7 @@ MongoDB 通过不强制集合中所有文档遵循特定模式的灵活性提供
 但随之而来的是如何在事务 **缺失** 的情况下维护数据库 一致性。
 
 本章将探索 MongoDB 的文档模型及其原子更新操作如何使关系型数据库中需使用事务来维护
-数据库一致性的方法。我们还会使用被称为 **补偿法** 的方式来模拟事务行为。
+数据库一致性的方法。我们还会使用被称为 **偿还法** 的方式来模拟事务行为。
 
 ### 获取一致性的关系型方式
 
@@ -241,7 +241,7 @@ MongoDB 通过不强制集合中所有文档遵循特定模式的灵活性提供
 										  'price': price } } })
 			if result['updatedExisting']: break
 			
-### 用补偿法进行乐观更新
+### 用偿还法进行乐观更新
 
 有时在 MongoDB 中不可能用单个 `update()` 来完成你的操作。
 普通的两相提交可能会发生竞态条件。
@@ -954,21 +954,549 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 			out={ 'reduce': ocollection.name, 'sharded': True })
 			
 ## 电子商务
-### 产品分类
+### 产品目录
+
+为了管理电子商务系统，第一件需要的东西是产品目录。产品目录必须能够存储多种
+具有不同的属性集的不同类型的对象。
+
 #### 解决方案概览
+
 #### 操作
-#### 分片考量
-### 分类层级
-#### 解决方案概览
-#### 模式设计
-#### 操作
-#### 分片考量
-### 库存管理
-#### 解决方案概览
-#### 模式
-#### 操作
+
+对大多数部署而言，产品目录的最主要用法是执行搜索操作。
+
+##### 根据折扣率降序排列查找产品
+
+	query = db.products.find( { 'pricing.pct_savings': {'$gt': 25 })
+	query = query.sort([('pricing.pct_savings', -1)])
+
+为支持这种类型的查询，我们将在 `pricing.pct_savings` 字段上创建一个索引：
+
+	db.products.ensure_index('pricing.pct_savings')
+
+> 因为 MongoDB 可以以顺序或降序读取索引，因此创建单元素索引时索引顺序是没有关系的
+
+##### 根据年代查找专辑并按创作年排序
+
+	query = db.products.find({
+		'type':'Audio Album',
+		'details.genre': 'jazz'})
+	query = query.sort([
+		('details.issue_date', -1)])
+
+为高效的支持该查询，我们创建一个组合索引：
+
+	db.products.ensure_index([
+		('type', 1),
+		('details.genre', 1),
+		('details.issue_date', -1)])
+
+> 索引的最后部分是排序字段。这可让 MongoDB 有序地遍历索引，并避免缓慢的内存排序
+
+##### 根据主演查找电影
+
+	query = db.products.find({'type': 'Film',
+		'details.actor': 'Keanu Reeves'})
+	query = query.sort([('details.issue_date', -1)])
+
+索引：
+
+	db.products.ensure_index([
+		('type', 1),
+		('details.actor', 1),
+		('details.issue_date', -1)])
+
+##### 查找标题中带有特定单词的电影
+
+最新版本的 MongoDB 中将具有称为全文索引的特性。如果你准备做很多基于文本的查询时，
+最后的方式可能是部署一个分离的全文搜索引擎（如 Apache Solr 或 ElasticSearch）。
+
+尽管在 MongoDB 中没有高效的全文搜索支持，它支持使用正则表达式查询。
+
+	import re
+	re_hacker = re.compile(r'.*hacker.*', re.IGNORECASE)
+	
+	query = db.products.find({'type': 'Film', 'title': re_hacker})
+	query = query.sort([('details.issue_date', -1)])
+
+尽管该查询不是特别快，MongoDB 支持有一种类型的正则搜索可以很好地利用索引：前缀正则。
+明确地匹配你所搜索的字段的字符串的开头，后跟一些前缀字符，允许 MongoDB 高效的使用"常规"的索引。
+
+	import re
+	re_prefix = re.compile(r'^A Few Good.*')
+	
+	query = db.products.find({'type': 'Film', 'title': re_prefix})
+	query = query.sort([('details.issue_date', -1)])
+
+本查询中，我们匹配标题的前缀，MongoDB 可以直接找到我们感兴趣的标题。
+
+> 正则表达式陷阱
+>
+> 如果你使用 `re.IGNORECASE` 标记，你就又回去了，因为索引创建时是大小写敏感的。
+> 如果你想大小写不敏感搜索，通常应该将该字段存储为全小写或全大写格式。
+
+如果你不想使用编译的正则表达式，MongoDB 提供了特定的语法：
+
+	query = db.products.find({
+		'type': 'Film',
+		'title': {'$regex': '.*hacker.*', '$options':'i'}})
+	query = query.sort([('details.issue_date', -1)])
+
+这种类型的查询的索引策略和前面的有所不同。
+
+	>>> db.products.ensure_index([
+	... 	('type', 1),
+	... 	('details.issue_date', -1),
+	... 	('title', 1)])
+
+##### 小结：索引所有东西！
+
+在电子商务系统中，我们通常不能知道用户所要过滤的是什么，因此一个好的想法是
+基于很可能出现的查询创建很多索引。尽管这种索引会降低更新速度，产品目录并不常更新，
+因此其缺点在搜索速度的显著提升中得到弥补。因此，如果你的应用中有一个代码路径执行
+一个查询，那么就应该有一个索引加速该查询。
+
 #### 分片考量
 
+	>>> db.command('shardcollection', 'dbname.product', {
+	... key : { 'type': 1, 'details.genre' : 1, 'sku':1 } })
+	{ "collectionsharded" : "dbname.product", "ok" : 1 }
+
+##### 不用分片扩展读性能
+
+虽然分片是扩展操作的最佳方式，有些数据集使得难以划分数据以使 `mongos` 能够路由
+查询到特定分片。这些情况下，`mongos` 发送查询到所有的分片然后在返回客户端前组合这些结果。
+
+这些情况下，你可以通过在客户端配置读偏好来允许 `mongos` 从复制集的二级
+ `mongod` 实例中读取。读取偏好可在每个连接或每个操作上配置。
+ 
+	conn = pymongo.MongoClient(read_preference=pymongo.SECONDARY_PREFERRED)
+
+如果你希望限制读取仅发生在二级上：
+	
+	conn = pymongo.MongoClient(read_preference=pymongo.SECONDARY)
+
+也可以再特定查询上指定：
+
+	results = db.product.find(..., read_preference=pymongo.SECONDARY_PREFERRED)
+	
+### 目录层级
+
+产品目录维护者面临的一个问题是产品的分类。产品通常层级地分类以方便目录浏览和产品规划。
+浮现的一个问题是当目录改变时如何做。本用例说明了 MongoDB 中如何构建和维护一个层级分类系统。
+
+#### 解决方案概览
+
+为建模一个产品目录层级，我们的方案在每个目录自身的文档中为该特定子目录保存了一系列的先祖目录。
+
+鉴于层级产品目录相对变更不频繁，我们将比更新性能而言更加关心查询性能和更新一致性。
+
+#### 模式设计
+
+简单设计：存储父目录ID
+
+	{ 	_id: "modal-jazz",
+		name: "Modal Jazz",
+		parent: "bop",
+		...
+	}
+
+虽然这种模式很灵活，但它仅支持一级层级的查询。如果我们希望查询某分类的所有先祖
+或后代，则应该使用其他方式来存储先祖列表。
+
+一种方式是基于父目录的ID来构建子目录的ID：
+
+	{ _id: "ragtime:bop:modal-jazz",
+		name: "Modal Jazz",
+		parent: "ragtime/bop",
+		...
+	}
+
+这种方式的方便之处在于：
+
+* 特定目录的先祖从其 `_id` 字段上都是自说明的
+* 特定目录的后代可以很容易地通过使用前缀正则表达式查询。如 `{_id: /^ragtime:bop:.*/}`
+
+但它也有一些问题：
+
+* 显示目录的先祖需要第二个查询以返回先祖文档
+* 更新层级很繁琐，需要对 `_id` 字段进行字符串操作
+
+我们这里选择的方案是将先祖存储为内嵌数组，每个先祖包含了为了显示的名称。
+我们也转换到使用 `ObjectId()` 作为 `_id` 字段并将人类可读的嵌条移到其自己的
+`slug` 字段以备根据需要改变。我们最终模式如下：
+
+	{ _id: ObjectId(...),
+		slug: "modal-jazz",
+		name: "Modal Jazz",
+		parent: ObjectId(...),
+		ancestors: [
+			{ _id: ObjectId(...),
+				slug: "bop",
+				name: "Bop" },
+			{ _id: ObjectId(...),
+				slug: "ragtime",
+				name: "Ragtime" } ] }
+
+#### 操作
+
+##### 读取和显示一个目录
+
+最常见的基本操作时根据嵌条查询一个目录层级。
+
+	category = db.categories.find(
+		{'slug': slug },
+		{'_id': 0, 'name': 1, 'ancestors.slug': 1, 'ancestors.name': 1} )
+
+索引：
+
+	>>> db.categories.ensure_index('slug', unique=True)
+
+##### 添加目录到层级中
+
+鉴于我们需要保留所有先祖的信息，因此我们需要实际计算该数组并在执行插入后保存它。
+因此我们定义了一下 `build_ancestors` 帮助函数：
+
+	def build_ancestors(_id, parent_id):
+		parent = db.categories.find_one(
+			{'_id': parent_id},
+			{'name': 1, 'slug': 1, 'ancestors':1})
+		parent_ancestors = parent.pop('ancestors')
+		ancestors = [ parent ] + parent_ancestors
+		db.categories.update(
+			{'_id': _id},
+			{'$set': { 'ancestors': ancestors } })
+
+注意，你仅需向上游历一个层级就能获得构建子目录先祖列表的父目录先祖列表。
+插入一个新目录代码如下：
+
+	doc = dict(name='Swing', slug='swing', parent=ragtime_id)
+	swing_id = db.categories.insert(doc)
+	build_ancestors(swing_id, ragtime_id)
+
+##### 改变一个目录的先祖
+
+首先我们将该目录父目录更新为指定目录：
+
+	db.categories.update(
+		{'_id':bop_id}, {'$set': { 'parent': swing_id } } )
+
+然后我们需要更新该目录和其所有后代文档的先祖列表。为此，我们首先在内存中构建该目录的
+的一个子图，包含了其所有后代，然后给子图中每个节点计算并存储先祖列表。
+
+	from collections import defaultdict
+	def build_subgraph(root):
+		nodes = db.categories.find(
+			{ 'ancestors._id': root['_id'] },
+			{ 'parent': 1, 'name': 1, 'slug': 1, 'ancestors': 1})
+		nodes_by_parent = defaultdict(list)
+		for n in nodes:
+			nodes_py_parent[n['parent']].append(n)
+		return nodes_by_parent
+
+当我们有了子图，就可以更新节点了：
+
+	def update_node_and_descendants(
+		nodes_by_parent, node, parent):
+		
+		# Update node's ancestors
+		node['ancestors'] = parent.ancestors + [
+			{ '_id': parent['_id'],
+				'slug': parent['slug'],
+				'name': parent['name']} ]
+		db.categories.update(
+			{'_id': node['_id']},
+			{'$set': {
+				'ancestors': ancestors,
+				'parent': parent['_id'] } })
+		# Recursively call children of 'node'
+		for child in nodes_by_parent[node['_id']]:
+			update_node_and_descendants(
+				nodes_by_parent, child, node)
+
+为确保子图构建操作很快，我们需要在 `ancestors._id` 上创建索引：
+
+	>>> db.categories.ensure_index('ancestors._id')
+
+##### 重命名一个目录
+
+首先更新该目录名称：
+
+	db.categories.update(
+		{'_id':bop_id}, {'$set': { 'name': 'BeBop' } } )
+
+然后更新在所有后代中的先祖列表：
+
+	db.categories.update(
+		{'ancestors._id': bop_id},
+		{'$set': { 'ancestors.$.name': 'BeBop' } },
+		multi=True)
+
+要知道的一些东西：
+
+* 查询中的 $ 占位符匹配确切匹配的“先祖”实体
+* `multi` 选项允许更新所有匹配的文档。默认 MongoDB 仅更新第一个匹配文档
+
+#### 分片考量
+
+鉴于目录集合本身不大，所以分片的价值不大。如果确实需要，鉴于所有查询都涉及 `_id`,
+因此它可以是比较合适的分片键：
+
+	>>> db.command('shardcollection', 'dbname.categories', {
+	... 'key': {'_id': 1} })
+	{ "collectionsharded" : "dbname.categories", "ok" : 1 }
+
+### 库存管理
+
+#### 解决方案概览
+
+![](images/shopping-cart-states.jpg)
+
+#### 模式
+`product` 集合为每个用户可放置到购物车的项，称为“库存单元”或 SKU。
+在特定 SKU 中包含一个购物车列表页很有用。这样做是因为我们将 `product` 用作
+系统的权威性地记录集合。这意味着当 `cart` 和 `product` 包含不一致的数据时，
+`product` 集合胜出。因为 MongoDB 不支持多文档事务，因此有一种方式来在两个集合不一致时
+“清理”数据，并 `product` 中保持一个 `carted` 属性以提供宽广大道：
+
+	{ _id: '00e8da9b',
+		qty: 16,
+		carted: [
+			{ qty: 1, cart_id: 42,
+				timestamp: ISODate("2012-03-09T20:55:36Z"), },
+			{ qty: 2, cart_id: 43,
+				timestamp: ISODate("2012-03-09T21:55:36Z") }
+		]
+	}
+
+我们的 `cart` 集合，将包含一个 `_id`, `state`, `last_modified` 以处理过期，及
+一个项及数量的列表：
+
+	{ _id: 42,
+		last_modified: ISODate("2012-03-09T20:55:36Z"),
+		status: 'active',
+		items: [
+			{ sku: '00e8da9b', qty: 1, details: {...} },
+			{ sku: '0ab42f88', qty: 4, details: {...} }
+		]
+	}
+
+#### 操作
+
+##### 添加一项到购物车中
+
+> 模式
+>
+> 对该操作和本节其他操作，我们将使用 [第三章][mimicking-transactional-behavior]
+> 的模式保持 `product` 和 `cart` 集合的一致性。
+
+基本步骤：
+
+1. 更新购物车，确保它还是活跃的，并添加该产品项
+2. **仅在有足够的库存时** 更新库存，降低可用库存量
+3. 如果库存因为库存不足而更新失败，通过回滚购物车更新并抛出异常来进行 **偿还**
+
+	def add_item_to_cart(cart_id, sku, qty, details):
+		now = datetime.utcnow()
+		
+		# Make sure the cart is still active and add the line item
+		result = db.cart.update(
+			{'_id': cart_id, 'status': 'active' },
+			{ '$set': { 'last_modified': now },
+				'$push': {
+					'items': {'sku': sku, 'qty':qty, 'details': details } } })
+		if not result['updatedExisting']:
+			raise CartInactive()
+			
+		# Update the inventory
+		result = db.product.update(
+			{'_id':sku, 'qty': {'$gte': qty}},
+			{'$inc': {'qty': -qty},
+			'$push': {
+				'carted': { 'qty': qty, 'cart_id':cart_id,
+					'timestamp': now } } })
+		if not result['updatedExisting']:
+			# Roll back our cart update
+			db.cart.update(
+				{'_id': cart_id },
+				{ '$pull': { 'items': {'sku': sku } } })
+			raise InadequateInventory()
+
+##### 修改购物车中的数量
+
+基本步骤类似于新增：
+
+1. 更新购物车（乐观地假设存在足够库存）
+2. 如果存在足够库存，更新 `product` 集合
+3. 如果库存不足，回滚购物车更新并抛出异常
+
+	def update_quantity(cart_id, sku, old_qty, new_qty):
+		now = datetime.utcnow()
+		delta_qty = new_qty - old_qty
+		# Make sure the cart is still active and add the line item
+		result = db.cart.update(
+			{'_id': cart_id, 'status': 'active', 'items.sku': sku },
+			{'$set': { 'last_modified': now },
+				'$inc': { 'items.$.qty': delta_qty }
+			})
+		if not result['updatedExisting']:
+			raise CartInactive()
+		# Update the inventory
+		result = db.product.update(
+			{'_id':sku,
+				'carted.cart_id': cart_id,
+				'qty': {'$gte': delta_qty} },
+			{'$inc': {'qty': -delta_qty },
+				'$set': { 'carted.$.qty': new_qty, 'timestamp': now } })
+		if not result['updatedExisting']:
+			# Roll back our cart update
+			db.cart.update(
+				{'_id': cart_id, 'items.sku': sku },
+				{'$inc': { 'items.$.qty': -delta_qty } })
+			raise InadequateInventory()
+
+##### 付款
+
+检出操作需要完成两个操作：
+
+* 捕获支付明细
+* 一旦支付成功，更新 `carted` 项
+
+基本算法：
+
+1. 通过将其设置为 `pending` 状态锁定购物车
+2. 收集支付信息。如果失败，解锁该购物车，并将其设回 `active` 状态
+3. 将购物车状态设为 `complete`
+4. 从 `product` 集合移除任何对该购物车的引用
+
+	def checkout(cart_id):
+		now = datetime.utcnow()
+		result = db.cart.update(
+			{'_id': cart_id, 'status': 'active' },
+			update={'$set': { 'status': 'pending','last_modified': now } } )
+		if not result['updatedExisting']:
+			raise CartInactive()
+		try:
+			collect_payment(cart)
+		except:
+			db.cart.update(
+				{'_id': cart_id },
+				{'$set': { 'status': 'active' } } )
+			raise
+		db.cart.update(
+			{'_id': cart_id },
+			{'$set': { 'status': 'complete' } } )
+		db.product.update(
+			{'carted.cart_id': cart_id},
+			{'$pull': {'cart_id': cart_id} },
+			multi=True)
+
+为加速更新，给 `carted.cart_id` 添加索引：
+
+	>>> db.product.ensure_index('carted.cart_id')
+	
+##### 从超时购物车返回到库存中
+
+1. 找到所有老于阈值的购物车并截止。通过将其状态改为 `expiring` 锁定它们。
+2. 对每个 `expiring` 购物车，将其所有项返回给可用库存。
+3. 一旦 `product` 集合被更新，将购物车状态设置为 `expired`。
+
+	def expire_carts(timeout):
+		now = datetime.utcnow()
+		threshold = now - timedelta(seconds=timeout)
+		# Lock and find all the expiring carts
+		db.cart.update(
+			{'status': 'active', 'last_modified': { '$lt': threshold } },
+			{'$set': { 'status': 'expiring' } },
+			multi=True )
+		# Actually expire each cart
+		for cart in db.cart.find({'status': 'expiring'}):
+			# Return all line items to inventory
+			for item in cart['items']:
+				db.product.update(
+					{ '_id': item['sku'],
+						'carted.cart_id': cart['id'] },
+					{'$inc': { 'qty': item['qty'] },
+						'$pull': { 'carted': { 'cart_id': cart['id'] } } }) 
+			db.cart.update(
+				{'_id': cart['id'] },
+				{'$set': { status': 'expired' })
+
+为支持从超时购物车返回，我们需要在 `status` 和 	`last_modify` 属性上创建索引：
+
+	>>> db.cart.ensure_index([('status', 1), ('last_modified', 1)])
+
+##### 错误处理
+
+上述操作都没有处理可能的失败情况。如果我们有了不一致的状态，库存就可能“陷在”了某个购物车中。
+
+为此，我们需要一个周期性清理操作，找到所有具有 carted 项的库存，确保它们存在于某些用户
+的活跃的购物车中，如果不是则将它们返回给库存。此处我们访问每个具有老于某个时间戳
+的 `carted` 实体的 `product`。然后针对每个找到的 SKU:
+
+1. 加载可能截止的 `cart`。如果它是 `active` 的，则更新 `product` 中的 `carted` 实体。
+2. 否则，移除该 `carted` 实体并更新可用库存
+
+	def cleanup_inventory(timeout):
+		now = datetime.utcnow()
+		threshold = now - timedelta(seconds=timeout)
+		# Find all the expiring carted items
+		for item in db.product.find(
+			{'carted.timestamp': {'$lt': threshold }}):
+			# Find all the carted items that matched
+			carted = dict(
+				(carted_item['cart_id'], carted_item)
+				for carted_item in item['carted']
+				if carted_item['timestamp'] < threshold)
+		# First Pass: Find any carts that are active and refresh the carted
+		# items
+		for cart in db.cart.find(
+			{ '_id': {'$in': carted.keys() },
+			'status':'active'}):
+			cart = carted[cart['_id']]
+			db.product.update(
+				{ '_id': item['_id'],
+					'carted.cart_id': cart['_id'] },
+				{ '$set': {'carted.$.timestamp': now } })
+			del carted[cart['_id']]
+		# Second Pass: All the carted items left in the dict need to now be
+		# returned to inventory
+		for cart_id, carted_item in carted.items():
+			db.product.update(
+				{ '_id': item['_id'],
+					'carted.cart_id': cart_id },
+				{ '$inc': { 'qty': carted_item['qty'] },
+					'$pull': { 'carted': { 'cart_id': cart_id } } })
+
+索引：
+
+	>>> db.product.ensure_index('carted.timestamp')
+
+#### 分片考量
+
+对该系统而已 `_id` 是一个 合理的选择。但是这样有几个缺点：
+
+* 如果购物车集合的 `_id` 是自增的，如 `ObjectId()` ，则所有新增都会归结到单个分片
+* 购物车超时和库存调整需要更新操作和查询广播到所有分片
+
+第一个问题可通过使用一个伪随机值作为 `_id`：
+
+	import hashlib
+	import bson
+	def new_cart():
+		object_id = bson.ObjectId()
+		cart_id = hashlib.md5(str(object_id)).hexdigest()
+		return cart_id
+
+实际分片如下：
+
+	>>> db.command('shardcollection', 'dbname.inventory'
+	... 'key': { '_id': 1 } )
+	{ "collectionsharded" : "dbname.inventory", "ok" : 1 }
+	>>> db.command('shardcollection', 'dbname.cart')
+	... 'key': { '_id': 1 } )
+	{ "collectionsharded" : "dbname.cart", "ok" : 1 }
+	
 ## 内容管理系统
 ### 元数据和资源管理
 #### 解决方案概览
