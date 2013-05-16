@@ -1,6 +1,6 @@
 Title: MongoDB 应用设计模式阅读笔记
 Author: LiuLongbiao
-css: http://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css
+css: http://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.1/css/bootstrap-combined.min.css
 HTML header: <script src="../../js/init.js"></script>
 
 本文用来记录《MongoDB 应用设计模式》的阅读笔记
@@ -697,20 +697,258 @@ MongoDB 支持组合的分片键。
 这是因为 MongoDB 对我们的 `minute` 属性的实际表示是一个它必须顺序地扫描以
 找到实际需更新的槽的键值对的数组。其解决方法是给 `minute` 构建层级。
 
+##### 每天每页面一个文档，层级文档
 
+将 `minute` 字段细分为 24 个小时字段。
+
+##### 按粒度水平分离文档
+
+虽然预填充文档可以显著加速我们的更新速度，我们在查询长的跨多天时段如月或季度时还是有问题。
+这种情况下，在更高层面存储日聚合数据可以加速这些查询。
+
+这在应用中的数据收集和聚合部分引入了第二个 upsert 操作集，但其在查询时获得的硬盘
+查找的减少应该使它值得这部分花费。
 
 #### 操作
+
+##### 记录事件日志
+
+记录事件日志如页面请求是你的系统的主要的“写入”活动。要最大化性能，你将使用
+`upsert=True` 来做原地更新，及在它们还没被创建时创建文档。
+
+##### 预填充
+
+为管理文档增长，我们将预填充文档为字段值为 0 的文档。
+
+现在的问题时何时去预填充文档。显然，为了最佳性能，它们需要在使用前进行预填充
+（尽管我们的 `upsert` 代码在文档不存在时依旧可以正确工作）。虽然我们可以一次性
+预填充所有的文档，但这在预填充时间内会导致较差的性能。更好的方案是在每次我们
+记录点击时根据概率进行预填充。
+
+	from random import random
+	from datetime import datetime, timedelta, time
+	
+	# Example probability based on 500k hits per day per page
+	prob_preallocate = 1.0 / 500000
+	
+	def log_hit(db, dt_utc, site, page):
+		if random.random() < prob_preallocate:
+			preallocate(db, dt_utc + timedelta(days=1), site_page)
+		# Update daily stats doc
+		...
+
+##### 为实时图表检索数据
+
+##### 为层级图表获取数据
 
 #### 分片考量
 
 ### 层级聚合 [hierarchical-aggregation]
 
+尽管 [预聚合报告][pre-aggregated-reports] 技术可以满足很多操作智能系统需求，常常我们
+还需要在多个抽象层面计算统计值。本节描述了如何使用 MongoDB 的 `mapreduce` 命令
+将交易型数据转换为多个抽象层面上的统计值。
+
+为清晰起见，本例假设了进入的事件数据贮存在名为 `events` 的集合中。
+它和 [存储日志数据][storing-log-data] 很适合，使得这两个技术可以很好地一起工作。
+
 #### 解决方案概览
+
+聚合过程的第一步是将事件数据在最细所需粒度上进行聚合。然后我们使用该聚合数据生成
+下一级粒度的，并且重复该过程直到生成所有所需的视图。
+
+本方案使用多个集合，层级过程中的所有聚合操作都使用 `mapreduce` 数据库命令。
 
 #### 模式设计
 
+当给事件存储设计模式时，追踪已经包含在聚合中的事件和还没包含的事件很重要。
+
+如果你可以批量插入到 `events` 集合，你可以使用 `find_and_modify` 命令生成 `_id` 值来创建
+自增主键，如下：
+
+	>>> obj = db.my_sequence.find_and_modify(
+	... query={'_id':0},
+	... update={'$inc': {'inc': 50}}
+	... upsert=True,
+	... new=True)
+	>>> batch_of_ids = range(obj['inc']-50, obj['inc'])
+
+然而很多时候，你可以简单地给每个事件包含一个时间戳以区分已处理和未处理事件。
+
 #### MapReduce
+
+MapReduce 算法是一种批量处理大量数据的常见方法。
+
+伪代码：
+
+from collections import defaultdict
+def map_reduce(input, output, query, mapf, reducef, finalizef):
+	# Map phase
+	map_output = []
+	for doc in input.find(output):
+		map_output += mapf(doc)
+		
+	# Shuffle phase
+	map_output.sort()
+	docs_by_key = groupby_keys(map_output)
+	
+	# Reduce phase
+	reduce_output = []
+	for key, values in docs_by_key:
+		reduce_output.append({
+			'_id': key,
+			'value': reducef(key, values) })
+			
+	# Finalize phase
+	finalize_output = []
+	for doc in reduce_output:
+		key, value = doc['_id'], doc['value']
+		reduce_output[key] = finalizef(key, value)
+		
+	output.remove()
+	output.insert(finalize_output)
 
 #### 操作
 
+本节假设所有事件都存在于 `events` 集合并有一个时间戳。这些操作将从 `events` 集合聚合
+为最小聚合 - 小时汇总 - 然后从小时汇总聚合成更粗粒度层级。
+所有操作都将存储聚合时间为 `last_run` 变量。
+
+##### 从 `event` 集合创建小时视图
+
+	mapf_hour = bson.Code('''function() {
+		var key = {
+			u: this.userid,
+			d: new Date(
+				this.ts.getFullYear(),
+				this.ts.getMonth(),
+				this.ts.getDate(),
+				this.ts.getHours(),
+				0, 0, 0);
+		emit(
+			key,
+			{
+				total: this.length,
+				count: 1,
+				mean: 0,
+				ts: null });
+	}''')
+	
+`mapf_hour` 发出包含你所希望聚合的键值对。
+
+	reducef = bson.Code('''function(key, values) {
+		var r = { total: 0, count: 0, mean: 0, ts: null };
+		values.forEach(function(v) {
+			r.total += v.total;
+			r.count += v.count;
+		});
+		return r;
+	}''')
+
+reduce 函数返回了和 mapf 函数的输出相同格式的文档。
+
+鉴于 reduce 函数忽略了 `mean` 和 `ts` 值，在 `finalize` 步骤我们将计算这些值：
+
+	finalizef = bson.Code('''function(key, value) {
+		if(value.count > 0) {
+			value.mean = value.total / value.count;
+		}
+		value.ts = new Date();
+		return value;
+	}''')
+
+有了上述代码定义，我们实际的 `mapreduce` 调用如下：
+
+	cutoff = datetime.utcnow() - timedelta(seconds=60)
+	query = { 'ts': { '$gt': last_run, '$lt': cutoff } }
+	
+	db.events.map_reduce(
+		map=mapf_hour,
+		reduce=reducef,
+		finalize=finalizef,
+		query=query,
+		out={ 'reduce': 'stats.hourly' })
+		
+	last_run = cutoff
+
+> #### 输出模式
+> 
+> MongoDB 的 `mapreduce` 针对不同的用例提供了多种输出模式。
+>
+> * replace - 移除后写入
+> * merge - 重写相同键的已有结果值
+> * reduce - 将输出集合视作 reduce 阶段的额外输入。常用于增量聚合，根据新数据调整已有结果
+> * inline - 输出结果不写入，直接作为 `mapreduce` 命令的返回结果
+
+鉴于我们周期性地根据日期查询 `events` 集合，针对该属性维护一个索引很重要：
+
+	>>> db.events.ensure_index('ts')
+	
+##### 得到日级数据
+
+要计算日统计，我们可以使用小时统计作为输入。
+
+	mapf_day = bson.Code('''function() {
+		var key = {
+			u: this._id.u,
+			d: new Date(
+				this._id.d.getFullYear(),
+				this._id.d.getMonth(),
+				this._id.d.getDate(),
+				0, 0, 0, 0) };
+		emit(
+			key,
+			{
+				total: this.value.total,
+				count: this.value.count,
+				mean: 0,
+				ts: null });
+	}''')
+
+得到日级数据的 map 函数和初始聚合在以下方面有所不同：
+
+* 聚合键为 `userid-data` 而不是 `userid-hour` 以支持日聚合。
+* 发出的键值实际上是小时聚合的 `total` 和 `count` 值，而不是 `event` 文档的属性
+
+所有更高层的聚合操作都是这样。因为该 `map` 函数的输出和前一个 `map` 函数一样，
+我们实际上可以重用相同的 `reduce` 和 `finalize` 函数。实际代码如下：
+
+	cutoff = datetime.utcnow() - timedelta(seconds=60)
+	query = { 'value.ts': { '$gt': last_run, '$lt': cutoff } }
+	
+	db.stats.hourly.map_reduce(
+		map=mapf_day,
+		reduce=reducef,
+		finalize=finalizef,
+		query=query,
+		out={ 'reduce': 'stats.daily' })
+		
+	last_run = cutoff
+
+这里要注意一些事情。首先，查询不再是基于 `ts` ，而是 `value.ts`。
+还要注意，我们实际上是从 `stats.hourly` 集合聚合到 `stats.daily` 集合。
+
+同样，在 `value.ts` 上创建一个索引：
+
+	>>> db.stats.hourly.ensure_index('value.ts')
+
+##### 周和月聚合
+
+我们可以从日统计聚合为周和月统计，所不同的仅在于 `map` 函数的日期计算。
+
+##### 重构 map 函数
+
 #### 分片考量
+
+可能选择 `userid-ts` 作为 `events` 的分片键。
+要分片聚合集合，我们必须使用和 `mapreduce` 配合良好的 `_id` 键。
+我们还需要添加 `'sharded':True` 到我们的 `h_aggregate` 以支持分片输出。
+
+	def h_aggregate(icollection, ocollection, mapf, cutoff, last_run):
+		query = { 'value.ts': { '$gt': last_run, '$lt': cutoff } }
+		icollection.map_reduce(
+			map=mapf,
+			reduce=reducef,
+			finalize=finalizef,
+			query=query,
+			out={ 'reduce': ocollection.name, 'sharded': True })
