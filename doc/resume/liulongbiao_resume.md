@@ -1,40 +1,41 @@
 Title: 刘龙彪简历
 Author: Liu Longbiao
 Email: liulongbiao@gmail.com
-css: http://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css
+css: http://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.2/css/bootstrap.min.css
 HTML header: <script src="../../js/init.js"></script>
 
 
 # 刘龙彪
 
-* ![icon_phone][] **13967197840**
-* ![icon_email][] liulongbiao@gmail.com
-* ![icon_tags][] **Java Web开发工程师**
-* ![icon_github][] https://github.com/liulongbiao
+> ![icon_phone][] **13967197840**<br/>
+> ![icon_email][] liulongbiao@gmail.com<br/>
+> ![icon_tags][] **Java Web开发工程师**<br/>
+> ![icon_github][] https://github.com/liulongbiao
 
-四年工作经验，精通 Java 和 JavaScript，熟悉 Clojure。
+四年 Java Web 开发经验。
 
-熟练掌握使用Spring、Spring MVC、Spring Data、Hibernate、iBatis、Struts2 等Java框架
-及jQuery、jQuery UI、jqGrid、NodeJs、Backbone.js、RequireJs、Raphael.js 等框架和工具进行 Web 开发。
- 
-关注技术发展、乐于寻求问题的解决方案
+精通 Java， 熟练掌握 Spring、Spring MVC、Spring Data、Hibernate、iBatis、Struts2 等Java框架的使用。<br/>
+精通 JavaScript，熟练掌握 jQuery、jQuery UI、jqGrid 等前端框架，了解 AngularJs 开发。<br/>
+熟悉 Clojure 语言，熟悉使用 Ring，Compojure 等进行Web 开发。
 
-## 工作经验
+关注技术发展、乐于寻求问题的解决方案。
+
+### 工作经验
 
 --------------------------------------------------------------------------------
 
 2012/8--至今
-:	**苏州睿洋科技有限公司** 高级软件工程师
+:	**苏州睿洋科技有限公司** Java 工程师
 	
 	区域能源管理平台是对区域中接入的计量器具所采集的数据进行统计分析的平台。
 	
-	主要参与平台业务组 Java 开发及 JavaScript 集成，主要模块包括计量器具管理、
+	主要参与平台业务组 Java 开发及前端 JavaScript 集成，主要模块包括计量器具管理、
 	锅炉分析、水泥对标、政府首页、在线监测、万家企业等。
 
 --------------------------------------------------------------------------------
 
 2011/9--2012/6
-:	**浙江赢在科技有限公司** 高级软件工程师
+:	**浙江赢在科技有限公司** Java 工程师
 
 	赢在每一天平台3.0 是一个基于 Web 的学生做题系统。 
 	
@@ -43,7 +44,7 @@ HTML header: <script src="../../js/init.js"></script>
 --------------------------------------------------------------------------------
  
 2010/12--2011/7
-:	**云计划软件科技(上海)有限公司** 软件工程师 
+:	**云计划软件科技(上海)有限公司** Java 工程师
 
 	外派至恒生电子通信事业二部，从事Java/J2EE方向的Web应用程序开发。
 	 
@@ -54,14 +55,14 @@ HTML header: <script src="../../js/init.js"></script>
 --------------------------------------------------------------------------------
  
 2009/12--2010/9
-:	**杭州宇乾教育科技有限公司** 软件工程师 
+:	**杭州宇乾教育科技有限公司** Java 工程师
 
 	校园网络电视台项目是教育视频的展播平台，前端通过 Flex 可以嵌入到各个学校的网页中，后台使用 Java
 	管理相关视频信息，并通过 XML 接口与Flex 客户端进行交互。 
 	
 	主要参与校园网络电视台项目相关模块的Java程序开发、维护及二次开发 
 
-## 教育及培训
+### 教育及培训
 
 --------------------------------------------------------------------------------
 
