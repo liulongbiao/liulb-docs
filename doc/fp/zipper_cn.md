@@ -33,12 +33,12 @@ The Zipper 是 Huet 对一个能够满足该需求的俏皮的数据结构的俏
 这个简单的想法肯定在很多地方被具有创造力的程序员发明了，这里给出的这个可能为大家所俗知的
 介绍理由是它还没有被发布过，或者说不是非常出名。
 
-== The Zipper 数据结构
+## The Zipper 数据结构
 
 在基本想法上，存在很多的变体。首先，我们先展示一个适用于具有可变元匿名树节点，且
 树的叶节点注入的是一个未指定的 item 类型的值的树。
 
-=== Trees, paths and locations
+### Trees, paths and locations
 
 假设我们想层级地操作一个类型参数为 item 的元素；树结构仅是将树分组为一个 section 的层级列表。
 例如，在 UNIX 文件系统中，items 将是文件，而 sections 将是目录；而文本编辑器中 items 将是字符，
@@ -83,12 +83,12 @@ The Zipper 是 Huet 对一个能够满足该需求的俏皮的数据结构的俏
 
 树中第二个乘号的 `location` 是：
 
-Loc(Item "*",
-    Node([Item "c"],
-        Node([Item "+"; Section [Item "a"; Item "*"; Item "b"]],
-            Top,
-            []),
-        [Item "d"]))
+	Loc(Item "*",
+		Node([Item "c"],
+			Node([Item "+"; Section [Item "a"; Item "*"; Item "b"]],
+				Top,
+				[]),
+			[Item "d"]))
 
 ### 树中的导航原语
 
@@ -115,11 +115,11 @@ Loc(Item "*",
 
 我们可以用这些导航原语来编写访问当前树的 nth 子节点。
 
-let nth loc = nthrec
-  where rec nthrec = function
-    1 -> go_down(loc)
-  | n -> if n>0 then go_right(nthrec (n-1))
-                else failwith "nth expects a positive integer";;
+	let nth loc = nthrec
+	  where rec nthrec = function
+		1 -> go_down(loc)
+	  | n -> if n>0 then go_right(nthrec (n-1))
+					else failwith "nth expects a positive integer";;
 
 ### 变更、插入和删除
 
@@ -142,11 +142,11 @@ let nth loc = nthrec
 我们也可能像实现一个删除原语。我们可以选择右移，如果可能的话，否则左移，再则如果是空列表的
 话则上移。
 
-let delete (Loc(_,p)) = match p with
-    Top -> failwith "delete of top"
-  | Node(left,up,r::right) -> Loc(r,Node(left,up,right))
-  | Node(l::left,up,[]) -> Loc(l,Node(left,up,[]))
-  | Node([],up,[]) -> Loc(Section[],up);;
+	let delete (Loc(_,p)) = match p with
+		Top -> failwith "delete of top"
+	  | Node(left,up,r::right) -> Loc(r,Node(left,up,right))
+	  | Node(l::left,up,[]) -> Loc(l,Node(left,up,[]))
+	  | Node([],up,[]) -> Loc(Section[],up);;
 
 注意到， `delete` 并不是很简单的操作。
 
@@ -170,12 +170,12 @@ let delete (Loc(_,p)) = match p with
 
 我们展示了在这些新结构上的简化的上移、下移操作：
 
-let go_up_memo (Loc(t,p)) = match p with
-    Top -> failwith "up of top"
-  | Node(left,p',right) -> Loc(Siblings(left,t,right),p');;
-let go_down_memo (Loc(t,p)) = match t with
-    Item(_) -> failwith "down of item"
-  | Siblings(left,t',right) -> Loc(t',Node(left,p,right));;
+	let go_up_memo (Loc(t,p)) = match p with
+		Top -> failwith "up of top"
+	  | Node(left,p',right) -> Loc(Siblings(left,t,right),p');;
+	let go_down_memo (Loc(t,p)) = match t with
+		Item(_) -> failwith "down of item"
+	  | Siblings(left,t',right) -> Loc(t',Node(left,p,right));;
 
 改编其他原语留给读者自行完成。
 
@@ -199,33 +199,33 @@ let go_down_memo (Loc(t,p)) = match t with
 
 作为示例，我们这里展示了二叉树所对应的结构：
 
-type binary_tree =
-Nil
-| Cons of binary_tree * binary_tree;;
-type binary_path =
-Top
-| Left of binary_path * binary_tree
-| Right of binary_tree * binary_path;;
-type binary_location = Loc of binary_tree * binary_path;;
-let change (Loc(_,p)) t = Loc(t,p);;
-let go_left (Loc(t,p)) = match p with
-Top -> failwith "left of top"
-| Left(father,right) -> failwith "left of Left"
-| Right(left,father) -> Loc(left,Left(father,t));;
-let go_right (Loc(t,p)) = match p with
-Top -> failwith "right of top"
-| Left(father,right) -> Loc(right,Right(t,father))
-| Right(left,father) -> failwith "right of Right";;
-let go_up (Loc(t,p)) = match p with
-Top -> failwith "up of top"
-| Left(father,right) -> Loc(Cons(t,right),father)
-| Right(left,father) -> Loc(Cons(left,t),father);;
-let go_first (Loc(t,p)) = match t with
-Nil -> failwith "first of Nil"
-| Cons(left,right) -> Loc(left,Left(p,right));;
-let go_second (Loc(t,p)) = match t with
-Nil -> failwith "second of Nil"
-| Cons(left,right) -> Loc(right,Right(left,p));;
+	type binary_tree =
+		Nil
+	  | Cons of binary_tree * binary_tree;;
+	type binary_path =
+		Top
+	  | Left of binary_path * binary_tree
+	  | Right of binary_tree * binary_path;;
+	type binary_location = Loc of binary_tree * binary_path;;
+	let change (Loc(_,p)) t = Loc(t,p);;
+	let go_left (Loc(t,p)) = match p with
+		Top -> failwith "left of top"
+	  | Left(father,right) -> failwith "left of Left"
+	  | Right(left,father) -> Loc(left,Left(father,t));;
+	let go_right (Loc(t,p)) = match p with
+		Top -> failwith "right of top"
+	  | Left(father,right) -> Loc(right,Right(t,father))
+	  | Right(left,father) -> failwith "right of Right";;
+	let go_up (Loc(t,p)) = match p with
+		Top -> failwith "up of top"
+	  | Left(father,right) -> Loc(Cons(t,right),father)
+	  | Right(left,father) -> Loc(Cons(left,t),father);;
+	let go_first (Loc(t,p)) = match t with
+		Nil -> failwith "first of Nil"
+	  | Cons(left,right) -> Loc(left,Left(p,right));;
+	let go_second (Loc(t,p)) = match t with
+		Nil -> failwith "second of Nil"
+	  | Cons(left,right) -> Loc(right,Right(left,p));;
 
 高效的二叉树上的破坏性算法可以很容易地完全用这些应用性方法编写，其中全部都花费常量时间，
 因为它们都归纳为本地指针操作。
@@ -233,14 +233,13 @@ Nil -> failwith "second of Nil"
 ## 参考
 
 * Donzeau-Gouge, V., Huet, G., Kahn, G. and Lang, B. (1984) <br/>
-Programming environments based on structured editors: the MENTOR experience. 
+Programming environments based on structured editors: the MENTOR experience. <br/>
 In: Barstow, D., Shrobe, H. and Sandewall, E., editors, Interactive Programming Environments. 128{140. McGraw Hill.
 * Huet, G. (1980) <br/>
-Confluent reductions: abstract properties and applications to term rewriting
-systems. J. ACM, 27(4), 797{821.
+Confluent reductions: abstract properties and applications to term rewriting systems. <br/>
+J. ACM, 27(4), 797{821.
 * Leroy, X., Remy, D. and Vouillon, J. (1996) <br/>
-The Objective Caml system, documentation
-and user's manual { release 1.02. INRIA, France. (Available at
-ftp.inria.fr:INRIA/Projects/cristal)
+The Objective Caml system, documentation and user's manual <br/>
+{ release 1.02. INRIA, France. (Available at ftp.inria.fr:INRIA/Projects/cristal)
 * Paulson, L. C. (1991) <br/>
 ML for the Working Programmer. Cambridge University Press.
