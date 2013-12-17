@@ -1,10 +1,10 @@
 Title: Leiningen
 Author: 刘龙彪
 css: http://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/css/bootstrap-combined.min.css
-css: http://yandex.st/highlightjs/7.3/styles/rainbow.min.css
-HTML header: <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
-    <script src="../js/highlight.pack.js"></script>
-    <script src="../js/init.js"></script>
+css: http://yandex.st/highlightjs/7.5/styles/rainbow.min.css
+HTML header: <script src="../../../../js/seajs/2.1.1/sea.js"></script>
+	<script src="../../../../js/config.js"></script>
+	<script>seajs.use("init");</script>
 
 ##  Leiningen
 

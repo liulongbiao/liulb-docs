@@ -1,7 +1,10 @@
 Title: 在数据库中存储层级数据
 Author: Gijs Van Tulder
-css: http://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.2.2/css/bootstrap.min.css
-HTML header: <script src="../../js/init.js"></script>
+css: http://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/css/bootstrap-combined.min.css
+css: http://yandex.st/highlightjs/7.5/styles/rainbow.min.css
+HTML header: <script src="../../js/seajs/2.1.1/sea.js"></script>
+	<script src="../../js/config.js"></script>
+	<script>seajs.use("init");</script>
 
 ## 在数据库中存储层级数据
 
@@ -47,28 +50,28 @@ By Gijs Van Tulder | April 30, 2003
 该函数会对每个检索到的子节点启动另一个它本身的实例，以显示所有的它们的子节点。
 这种递归机制名为 **递归方法**。
 
-	<?php 
-	// $parent is the parent of the children we want to see 
-	// $level is increased when we go deeper into the tree, 
-	//        used to display a nice indented tree 
-	function display_children($parent, $level) { 
-	    // retrieve all children of $parent 
-	    $result = mysql_query('SELECT title FROM tree '. 
-	                           'WHERE parent="'.$parent.'";'); 
-	
-	    // display each child 
-	    while ($row = mysql_fetch_array($result)) { 
-	        // indent and display the title of this child 
-	        echo str_repeat('  ',$level).$row['title']."\n"; 
-	
-	        // call this function again to display this 
-	        // child's children 
-	        display_children($row['title'], $level+1); 
-	    } 
-	} 
+	<?php
+	// $parent is the parent of the children we want to see
+	// $level is increased when we go deeper into the tree,
+	//        used to display a nice indented tree
+	function display_children($parent, $level) {
+	    // retrieve all children of $parent
+	    $result = mysql_query('SELECT title FROM tree '.
+	                           'WHERE parent="'.$parent.'";');
+
+	    // display each child
+	    while ($row = mysql_fetch_array($result)) {
+	        // indent and display the title of this child
+	        echo str_repeat('  ',$level).$row['title']."\n";
+
+	        // call this function again to display this
+	        // child's children
+	        display_children($row['title'], $level+1);
+	    }
+	}
 	?>
-	
-要显式整棵树，我们会传入一个空字符串作为 `$parent` 和 `$level = 0` 即 `display_children('',0);` 
+
+要显式整棵树，我们会传入一个空字符串作为 `$parent` 和 `$level = 0` 即 `display_children('',0);`
 对我们的食物商店树，该函数返回：
 
 	Food
@@ -80,7 +83,7 @@ By Gijs Van Tulder | April 30, 2003
 	  Meat
 	    Beef
 	    Pork
-	    
+
 注意，如果你只想要一颗子树，你可以让该函数以另一个节点开始。如显式 `Fruit` 子树，
 你可以运行 `display_children('Fruit',0);`
 
@@ -94,44 +97,44 @@ By Gijs Van Tulder | April 30, 2003
 我们可以通过使用到 `Red` 的路径来计算到 `Cherry` 的路径。
 这由我们刚使用的函数给出：通过递归地查找父节点，我们将得到一个树中到任何节点的路径。
 
-	<?php 
-	// $node is the name of the node we want the path of 
-	function get_path($node) { 
-	    // look up the parent of this node 
-	    $result = mysql_query('SELECT parent FROM tree '. 
-	                           'WHERE title="'.$node.'";'); 
-	    $row = mysql_fetch_array($result); 
-	
-	    // save the path in this array 
-	    $path = array(); 
-	
-	    // only continue if this $node isn't the root node 
-	    // (that's the node with no parent) 
-	    if ($row['parent']!='') { 
-	        // the last part of the path to $node, is the name 
-	        // of the parent of $node 
-	        $path[] = $row['parent']; 
-	
-	        // we should add the path to the parent of this node 
-	        // to the path 
-	        $path = array_merge(get_path($row['parent']), $path); 
-	    } 
-	
-	    // return the path 
-	    return $path; 
-	} 
+	<?php
+	// $node is the name of the node we want the path of
+	function get_path($node) {
+	    // look up the parent of this node
+	    $result = mysql_query('SELECT parent FROM tree '.
+	                           'WHERE title="'.$node.'";');
+	    $row = mysql_fetch_array($result);
+
+	    // save the path in this array
+	    $path = array();
+
+	    // only continue if this $node isn't the root node
+	    // (that's the node with no parent)
+	    if ($row['parent']!='') {
+	        // the last part of the path to $node, is the name
+	        // of the parent of $node
+	        $path[] = $row['parent'];
+
+	        // we should add the path to the parent of this node
+	        // to the path
+	        $path = array_merge(get_path($row['parent']), $path);
+	    }
+
+	    // return the path
+	    return $path;
+	}
 	?>
-	
+
 该函数现在返回到给定节点的路径。它将路径作为数组返回，因此显式该路径我们可以使用
 `print_r(get_path('Cherry'));` 如果你应用到 `Cherry` 上，你将看到：
 
-	Array 
-	( 
-	    [0] => Food 
-	    [1] => Fruit 
-	    [2] => Red 
+	Array
+	(
+	    [0] => Food
+	    [1] => Fruit
+	    [2] => Red
 	)
-	
+
 #### 缺点
 
 可以看到，这是一种强大的方法。它易于理解，且所需的代码也很简单。
@@ -178,7 +181,7 @@ By Gijs Van Tulder | April 30, 2003
 SQL 中，它将是：
 
 	SELECT * FROM tree WHERE lft BETWEEN 2 AND 11;
-	
+
 它会返回：
 
 ![](images/table03.gif)
@@ -189,7 +192,7 @@ SQL 中，它将是：
 我们因此由它们的 `left` 值排列行。
 
 	SELECT * FROM tree WHERE lft BETWEEN 2 AND 11 ORDER BY lft ASC;
-	
+
 还有就是缩进的问题。
 
 为显式树结构，子节点应该比它们的父节点略微缩进深些。我们可以通过持有一个 `right` 值的栈来完成。
@@ -199,40 +202,40 @@ SQL 中，它将是：
 当你完成显式一个节点后，你将其 `right` 值从栈顶移除。
 如果你计数栈中的元素，你会得到当前节点的层级。
 
-	<?php  
-	function display_tree($root) {  
-	    // retrieve the left and right value of the $root node  
-	    $result = mysql_query('SELECT lft, rgt FROM tree '.  
-	                           'WHERE title="'.$root.'";');  
-	    $row = mysql_fetch_array($result);  
-	
-	    // start with an empty $right stack  
-	    $right = array();  
-	
-	    // now, retrieve all descendants of the $root node  
-	    $result = mysql_query('SELECT title, lft, rgt FROM tree '.  
-	                           'WHERE lft BETWEEN '.$row['lft'].' AND '.  
-	                           $row['rgt'].' ORDER BY lft ASC;');  
-	
-	    // display each row  
-	    while ($row = mysql_fetch_array($result)) {  
-	        // only check stack if there is one  
-	        if (count($right)>0) {  
-	            // check if we should remove a node from the stack  
-	            while ($right[count($right)-1]<$row['rgt']) {  
-	                array_pop($right);  
-	            }  
-	        }  
-	
-	        // display indented node title  
-	        echo str_repeat('  ',count($right)).$row['title']."\n";  
-	
-	        // add this node to the stack  
-	        $right[] = $row['rgt'];  
-	    }  
-	}  
+	<?php
+	function display_tree($root) {
+	    // retrieve the left and right value of the $root node
+	    $result = mysql_query('SELECT lft, rgt FROM tree '.
+	                           'WHERE title="'.$root.'";');
+	    $row = mysql_fetch_array($result);
+
+	    // start with an empty $right stack
+	    $right = array();
+
+	    // now, retrieve all descendants of the $root node
+	    $result = mysql_query('SELECT title, lft, rgt FROM tree '.
+	                           'WHERE lft BETWEEN '.$row['lft'].' AND '.
+	                           $row['rgt'].' ORDER BY lft ASC;');
+
+	    // display each row
+	    while ($row = mysql_fetch_array($result)) {
+	        // only check stack if there is one
+	        if (count($right)>0) {
+	            // check if we should remove a node from the stack
+	            while ($right[count($right)-1]<$row['rgt']) {
+	                array_pop($right);
+	            }
+	        }
+
+	        // display indented node title
+	        echo str_repeat('  ',count($right)).$row['title']."\n";
+
+	        // add this node to the stack
+	        $right[] = $row['rgt'];
+	    }
+	}
 	?>
-	
+
 运行这段代码，你将得到和上述递归函数得到的相同的树。
 我们的新函数很可能更快一些：它不是递归的且仅使用了两次查询。
 
@@ -257,7 +260,7 @@ SQL 中，它将是：
 	| Fruit |
 	| Red   |
 	+-------+
-	
+
 我们现在仅需要连接这些行来得到 `Cherry` 的路径。
 
 #### 有多少后代
@@ -278,32 +281,32 @@ SQL 中，它将是：
 
 让我们写一个脚本将一个邻接表转换成一个改进的前序树遍历表。
 
-	<?php   
-	function rebuild_tree($parent, $left) {   
-	    // the right value of this node is the left value + 1   
-	    $right = $left+1;   
-	
-	    // get all children of this node   
-	    $result = mysql_query('SELECT title FROM tree '.   
-	                           'WHERE parent="'.$parent.'";');   
-	    while ($row = mysql_fetch_array($result)) {   
-	        // recursive execution of this function for each   
-	        // child of this node   
-	        // $right is the current right value, which is   
-	        // incremented by the rebuild_tree function   
-	        $right = rebuild_tree($row['title'], $right);   
-	    }   
-	
-	    // we've got the left value, and now that we've processed   
-	    // the children of this node we also know the right value   
-	    mysql_query('UPDATE tree SET lft='.$left.', rgt='.   
-	                 $right.' WHERE title="'.$parent.'";');   
-	
-	    // return the right value of this node + 1   
-	    return $right+1;   
-	}   
+	<?php
+	function rebuild_tree($parent, $left) {
+	    // the right value of this node is the left value + 1
+	    $right = $left+1;
+
+	    // get all children of this node
+	    $result = mysql_query('SELECT title FROM tree '.
+	                           'WHERE parent="'.$parent.'";');
+	    while ($row = mysql_fetch_array($result)) {
+	        // recursive execution of this function for each
+	        // child of this node
+	        // $right is the current right value, which is
+	        // incremented by the rebuild_tree function
+	        $right = rebuild_tree($row['title'], $right);
+	    }
+
+	    // we've got the left value, and now that we've processed
+	    // the children of this node we also know the right value
+	    mysql_query('UPDATE tree SET lft='.$left.', rgt='.
+	                 $right.' WHERE title="'.$parent.'";');
+
+	    // return the right value of this node + 1
+	    return $right+1;
+	}
 	?>
-	
+
 这是一个递归函数。你应该以 `rebuild_tree('Food',1);` 启动它。
 该函数然后会检索所有 `Food` 节点的子节点。
 
@@ -335,7 +338,7 @@ SQL 中，它将是：
 
 我们将使用以下查询：
 
-	UPDATE tree SET rgt=rgt+2 WHERE rgt>5;   
+	UPDATE tree SET rgt=rgt+2 WHERE rgt>5;
 	UPDATE tree SET lft=lft+2 WHERE lft>5;
 
 现在我们可以添加一个新节点 `Strawberry` 以填充新的空间。该节点具有 `left` 值 6 和 `right` 值 7 。
@@ -344,15 +347,15 @@ SQL 中，它将是：
 
 运行 `display_tree()` 函数，我们可以看到新的节点 `Strawberry` 以及成功插入到树中：
 
-	Food   
-	  Fruit   
-	    Red   
-	      Cherry   
-	      Strawberry   
-	    Yellow   
-	      Banana   
-	  Meat   
-	    Beef   
+	Food
+	  Fruit
+	    Red
+	      Cherry
+	      Strawberry
+	    Yellow
+	      Banana
+	  Meat
+	    Beef
 	    Pork
 
 #### 缺点
@@ -371,19 +374,19 @@ SQL 中，它将是：
 
 ### 进阶阅读
 
-More on Trees in SQL by database wizard Joe Celko: 
+More on Trees in SQL by database wizard Joe Celko:
 http://searchdatabase.techtarget.com/tip/1,289483,sid13_gci537290,00.html
 
-Two other ways to handle hierarchical data: 
+Two other ways to handle hierarchical data:
 http://www.evolt.org/article/Four_ways_to_work_with_hierarchical_data/17/4047/index.html
 
-Xindice, the ‘native XML database’: 
+Xindice, the ‘native XML database’:
 http://xml.apache.org/xindice/
 
-An explanation of recursion: 
+An explanation of recursion:
 http://www.strath.ac.uk/IT/Docs/Ccourse/subsection3_9_5.html
 
-If you enjoyed reading this post, you’ll love Learnable; 
-the place to learn fresh skills and techniques from the masters. 
-Members get instant access to all of SitePoint’s ebooks and interactive online courses, 
+If you enjoyed reading this post, you’ll love Learnable;
+the place to learn fresh skills and techniques from the masters.
+Members get instant access to all of SitePoint’s ebooks and interactive online courses,
 like PHP & MySQL Web Development for Beginners.

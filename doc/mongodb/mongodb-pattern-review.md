@@ -1,7 +1,10 @@
 Title: MongoDB 应用设计模式阅读笔记
 Author: LiuLongbiao
-css: http://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.1/css/bootstrap-combined.min.css
-HTML header: <script src="../../js/init.js"></script>
+css: http://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/css/bootstrap-combined.min.css
+css: http://yandex.st/highlightjs/7.5/styles/rainbow.min.css
+HTML header: <script src="../../js/seajs/2.1.1/sea.js"></script>
+	<script src="../../js/config.js"></script>
+	<script>seajs.use("init");</script>
 
 本文用来记录《MongoDB 应用设计模式》的阅读笔记
 
@@ -49,7 +52,7 @@ MongoDB 也有一个局限性（因数据库分区简单化的需求所驱动）
 
 	contact_info = db.contacts.find_one({'_id': 3})
 	number_info = list(db.numbers.find({'contact_id': 3})
-	
+
 这实际上比关系型的 `JOIN` 操作更糟。
 因此如果你的应用总是频繁访问带有所有电话号码的联系人信息的话，
 你几乎总是希望将电话号码嵌入联系人信息记录中。
@@ -123,7 +126,7 @@ MongoDB 中可以一次性更新所有文档：
 		node = db.nodes.find_one({'url': url})
 		node.setdefault('short_description', '')
 		return node
-		
+
 然后我们可能选择在后台增量迁移集合，如一次 100 个文档：
 
 	def add_short_descriptions():
@@ -133,7 +136,7 @@ MongoDB 中可以一次性更新所有文档：
 		{ '_id': {'$in': node_ids_to_migrate } },
 		{ '$set': { 'short_description': '' } },
 		multi=True)
-		
+
 全部迁移完成后我们就可以忽略默认值了：
 
 	def get_node_by_url(url):
@@ -162,7 +165,7 @@ Object-Document Mappers
 		'Transfer Rate': '...'
 		... }
 	}
-	
+
 存储半结构化数据的缺点是难以执行查询及在你希望你的应用不知道的字段上建索引。
 
 另一种可能使用的方式是包含属性-值对的一个数组：
@@ -178,15 +181,15 @@ Object-Document Mappers
 		['Transfer Rate', '...'],
 		... ]
 	}
-	
+
 用这种方式，我们可以用下面命令让 MongoDB 在 `properties` 字段上建索引：
 
 	db.products.ensure_index('properties')
-	
+
 有了索引，我们对指定属性值对的查询如下：
 
 	db.products.find({'properties': [ 'Seek Time': '5ms' ]})
-	
+
 ### 小结
 
 MongoDB 通过不强制集合中所有文档遵循特定模式的灵活性提供了比 RDBMS 一些好处：
@@ -240,7 +243,7 @@ MongoDB 通过不强制集合中所有文档遵循特定模式的灵活性提供
 										  'qty': qty,
 										  'price': price } } })
 			if result['updatedExisting']: break
-			
+
 ### 用偿还法进行乐观更新
 
 有时在 MongoDB 中不可能用单个 `update()` 来完成你的操作。
@@ -263,12 +266,12 @@ MongoDB 通过不强制集合中所有文档遵循特定模式的灵活性提供
 		src: 1,
 		dst: 2
 	}
-	
+
 我们的 `account` 模式也稍稍改变以存储待解决的事务 ID 。
 
 	{ _id: 1, balance: 100, txns: [] }
 	{ _id: 2, balance: 0, txns: [] }
-	
+
 顶层的 `transfer` 函数将一定的量从一个账号转换到另一个，但添加了该事务完成
 的最大时间。如果事务花费了更长时间，将由一个周期性过程将其回滚。
 
@@ -303,7 +306,7 @@ MongoDB 通过不强制集合中所有文档遵循特定模式的灵活性提供
 			{ '$inc': { 'balance': amt },
 				'$push': { 'txns': txn['_id'] } })
 		return txn
-		
+
 这里要注意两个关键点：
 
 * 源和目标账号存储了待解决的事务的列表。这让我们可以跟踪某个特定事务ID是否是带决定
@@ -336,7 +339,7 @@ MongoDB 通过不强制集合中所有文档遵循特定模式的灵活性提供
 			{ '_id': txn['dst'], 'txns._id': txn['_id'] },
 			{ '$pull': { 'txns': txn_id } })
 		db.transaction.remove({'_id': txn_id})
-		
+
 注意 `retire_transaction` 函数式 **幂等的** ：它可以用相同的 `txn_id` 调用
 任意多次，得到的效果和调用一次一样。这意味着如果我们在移除事务对象前
 的任意时刻崩溃，随后的清楚进程依旧可以通过简单地调用 `retire_transaction` 退休该事务。
@@ -355,7 +358,7 @@ MongoDB 通过不强制集合中所有文档遵循特定模式的灵活性提供
 		# Actually rollback transactions
 		for txn in db.transaction.find({ 'state': 'rollback' }):
 			rollback_transfer()
-			
+
 最后，如果我们想回滚一个事务，我们需要更新事务对象并 **撤销** 转换的效果：
 
 	def rollback_transfer(txn):
@@ -417,13 +420,13 @@ MongoDB 允许你在执行更新时(如事件数据插入)做的一条决策是�
 来换取插入速度的增长。
 
 > **写关注**
-> 
+>
 > MongoDB 具有可配置的写关注。该能力让你可以在保证所有写操作都记录进数据库
 > 和插入速度之间做权衡。
 >
 > 合适的写关注常是一个应用特定的决策，且依赖于你的分析应用的报告需求和使用。
 
-write replica & journal 
+write replica & journal
 
 ##### 批量插入
 
@@ -448,7 +451,7 @@ write replica & journal
 当然，如果你想该查询运行良好，你需要给它添加一个索引：
 
 	>>> db.events.ensure_index('path')
-	
+
 ##### 旁白：管理索引大小
 
 在你创建索引时需要记住的是索引所使用的 RAM 的大小。当索引被随机访问时，
@@ -483,12 +486,12 @@ write replica & journal
 	... 	'host': '127.0.0.1',
 	... 	'time': {'$gte':datetime(2000,10,10),'$lt':datetime(2000,10,11)}
 	... })
-	
+
 对这种类型的查询而言你可能使用的索引会显著影响其性能。例如，你可以创建一个
 `time-host` 字段对上的组合索引，如下：
 
 	>>> db.events.ensure_index([('time', 1), ('host', 1)])
-	
+
 要分析上例查询的性能，MongoDB 提供了 `explain()` 方法。我们在控制台
 执行 `q_events.explain()` 。它的返回结果类似：
 
@@ -505,12 +508,12 @@ write replica & journal
 		u'nscanned': 1296,
 		u'nscannedObjects': 11,
 		... }
-		
+
 该查询在 4 ms 内从索引中扫描了 1296 项以返回 11 个对象。相反的，
 你可以测试以 `host` 字段开头，跟着是 `time` 字段的组合索引。
 
 	>>> db.events.ensure_index([('host', 1), ('time', 1)])
-	
+
 现在， `explain()` 告诉我们的如下：
 
 	{ ...
@@ -624,12 +627,12 @@ MongoDB 支持组合的分片键。
 
 ##### TTL 集合
 
-策略：如果你想要可分片的类似于加盖结合东西，你可以考虑在该集合上使用 “存活时间”(TTL) 
+策略：如果你想要可分片的类似于加盖结合东西，你可以考虑在该集合上使用 “存活时间”(TTL)
 索引。如果你在一个集合上定义了一个 TTL 索引，则 MongoDB 会周期性地从集合中 `remove()`
 旧的文档。要创建一个 TTL 索引，可使用如下命令：
 
 	>>> db.events.ensureIndex('time', expireAfterSeconds=3600)
-	
+
 尽管 TTL 索引很方便，它无法拥有加盖结合的性能优势。因为 TTL `remove()` 没有比
 常规的 `remove()` 有优化，它们还是会导致数据碎片（加盖集合不会有碎片）且
 在移除时还是需要引发一个索引查找（加盖集合不需要索引查找）
@@ -727,10 +730,10 @@ MongoDB 支持组合的分片键。
 
 	from random import random
 	from datetime import datetime, timedelta, time
-	
+
 	# Example probability based on 500k hits per day per page
 	prob_preallocate = 1.0 / 500000
-	
+
 	def log_hit(db, dt_utc, site, page):
 		if random.random() < prob_preallocate:
 			preallocate(db, dt_utc + timedelta(days=1), site_page)
@@ -787,24 +790,24 @@ def map_reduce(input, output, query, mapf, reducef, finalizef):
 	map_output = []
 	for doc in input.find(output):
 		map_output += mapf(doc)
-		
+
 	# Shuffle phase
 	map_output.sort()
 	docs_by_key = groupby_keys(map_output)
-	
+
 	# Reduce phase
 	reduce_output = []
 	for key, values in docs_by_key:
 		reduce_output.append({
 			'_id': key,
 			'value': reducef(key, values) })
-			
+
 	# Finalize phase
 	finalize_output = []
 	for doc in reduce_output:
 		key, value = doc['_id'], doc['value']
 		reduce_output[key] = finalizef(key, value)
-		
+
 	output.remove()
 	output.insert(finalize_output)
 
@@ -833,7 +836,7 @@ def map_reduce(input, output, query, mapf, reducef, finalizef):
 				mean: 0,
 				ts: null });
 	}''')
-	
+
 `mapf_hour` 发出包含你所希望聚合的键值对。
 
 	reducef = bson.Code('''function(key, values) {
@@ -861,18 +864,18 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 
 	cutoff = datetime.utcnow() - timedelta(seconds=60)
 	query = { 'ts': { '$gt': last_run, '$lt': cutoff } }
-	
+
 	db.events.map_reduce(
 		map=mapf_hour,
 		reduce=reducef,
 		finalize=finalizef,
 		query=query,
 		out={ 'reduce': 'stats.hourly' })
-		
+
 	last_run = cutoff
 
 > #### 输出模式
-> 
+>
 > MongoDB 的 `mapreduce` 针对不同的用例提供了多种输出模式。
 >
 > * replace - 移除后写入
@@ -883,7 +886,7 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 鉴于我们周期性地根据日期查询 `events` 集合，针对该属性维护一个索引很重要：
 
 	>>> db.events.ensure_index('ts')
-	
+
 ##### 得到日级数据
 
 要计算日统计，我们可以使用小时统计作为输入。
@@ -915,14 +918,14 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 
 	cutoff = datetime.utcnow() - timedelta(seconds=60)
 	query = { 'value.ts': { '$gt': last_run, '$lt': cutoff } }
-	
+
 	db.stats.hourly.map_reduce(
 		map=mapf_day,
 		reduce=reducef,
 		finalize=finalizef,
 		query=query,
 		out={ 'reduce': 'stats.daily' })
-		
+
 	last_run = cutoff
 
 这里要注意一些事情。首先，查询不再是基于 `ts` ，而是 `value.ts`。
@@ -952,7 +955,7 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 			finalize=finalizef,
 			query=query,
 			out={ 'reduce': ocollection.name, 'sharded': True })
-			
+
 ## 电子商务
 ### 产品目录
 
@@ -1015,7 +1018,7 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 
 	import re
 	re_hacker = re.compile(r'.*hacker.*', re.IGNORECASE)
-	
+
 	query = db.products.find({'type': 'Film', 'title': re_hacker})
 	query = query.sort([('details.issue_date', -1)])
 
@@ -1024,7 +1027,7 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 
 	import re
 	re_prefix = re.compile(r'^A Few Good.*')
-	
+
 	query = db.products.find({'type': 'Film', 'title': re_prefix})
 	query = query.sort([('details.issue_date', -1)])
 
@@ -1069,17 +1072,17 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 
 这些情况下，你可以通过在客户端配置读偏好来允许 `mongos` 从复制集的二级
  `mongod` 实例中读取。读取偏好可在每个连接或每个操作上配置。
- 
+
 	conn = pymongo.MongoClient(read_preference=pymongo.SECONDARY_PREFERRED)
 
 如果你希望限制读取仅发生在二级上：
-	
+
 	conn = pymongo.MongoClient(read_preference=pymongo.SECONDARY)
 
 也可以再特定查询上指定：
 
 	results = db.product.find(..., read_preference=pymongo.SECONDARY_PREFERRED)
-	
+
 ### 目录层级
 
 产品目录维护者面临的一个问题是产品的分类。产品通常层级地分类以方便目录浏览和产品规划。
@@ -1198,7 +1201,7 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 
 	def update_node_and_descendants(
 		nodes_by_parent, node, parent):
-		
+
 		# Update node's ancestors
 		node['ancestors'] = parent.ancestors + [
 			{ '_id': parent['_id'],
@@ -1298,7 +1301,7 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 
 	def add_item_to_cart(cart_id, sku, qty, details):
 		now = datetime.utcnow()
-		
+
 		# Make sure the cart is still active and add the line item
 		result = db.cart.update(
 			{'_id': cart_id, 'status': 'active' },
@@ -1307,7 +1310,7 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 					'items': {'sku': sku, 'qty':qty, 'details': details } } })
 		if not result['updatedExisting']:
 			raise CartInactive()
-			
+
 		# Update the inventory
 		result = db.product.update(
 			{'_id':sku, 'qty': {'$gte': qty}},
@@ -1394,7 +1397,7 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 为加速更新，给 `carted.cart_id` 添加索引：
 
 	>>> db.product.ensure_index('carted.cart_id')
-	
+
 ##### 从超时购物车返回到库存中
 
 1. 找到所有老于阈值的购物车并截止。通过将其状态改为 `expiring` 锁定它们。
@@ -1417,7 +1420,7 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 					{ '_id': item['sku'],
 						'carted.cart_id': cart['id'] },
 					{'$inc': { 'qty': item['qty'] },
-						'$pull': { 'carted': { 'cart_id': cart['id'] } } }) 
+						'$pull': { 'carted': { 'cart_id': cart['id'] } } })
 			db.cart.update(
 				{'_id': cart['id'] },
 				{'$set': { status': 'expired' })
@@ -1496,7 +1499,7 @@ reduce 函数返回了和 mapf 函数的输出相同格式的文档。
 	>>> db.command('shardcollection', 'dbname.cart')
 	... 'key': { '_id': 1 } )
 	{ "collectionsharded" : "dbname.cart", "ok" : 1 }
-	
+
 ## 内容管理系统
 ### 元数据和资源管理
 #### 解决方案概览
