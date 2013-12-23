@@ -318,6 +318,148 @@ Computed Observable 提供了以下函数：
 ### 使用表单字段
 ### 渲染模板
 ### 绑定语法
+
+#### `data-bind` 语法
+
+Knockout 的声明式绑定系统提供了一种简洁强大的方式将数据链接到 UI 上。
+绑定到简单的数据属性或者使用单个绑定通常很简单。
+对更复杂的绑定，需要更好的理解 Knockout 绑定系统的行为和语法。
+
+##### 绑定语法
+
+一个绑定由绑定名称和值两部分组成，由冒号隔开。简单的单绑定示例如下：
+
+	Today's message is: <span data-bind="text: myMessage"></span>
+
+元素可包含多个绑定(相关或不相关的)，其中每个绑定由逗号隔开。如下：
+
+	<!-- related bindings: valueUpdate is a parameter for value -->
+	Your value: <input data-bind="value: someValue, valueUpdate: 'afterkeydown'" />
+	 
+	<!-- unrelated bindings -->
+	Cellphone: <input data-bind="value: cellphoneNumber, enable: hasCellphone" />
+
+绑定名称通常应该匹配一个注册的绑定处理器(内建或自定义的)或者是另一个绑定的参数。
+如果名称都不匹配，Knockout 将忽略它(不带任何错误或警告)。
+因此如果某个绑定不起作用的话，先检查名称是否正确。
+
+##### 绑定值
+
+绑定值可以是单个值、变量或字面量或几乎任何有效的 JavaScript 表达式。示例如下：
+
+	<!-- variable (usually a property of the current view model -->
+	<div data-bind="visible: shouldShowMessage">...</div>
+	 
+	<!-- comparison and conditional -->
+	The item is <span data-bind="text: price() > 50 ? 'expensive' : 'cheap'"></span>.
+	 
+	<!-- function call and comparison -->
+	<button data-bind="enable: parseAreaCode(cellphoneNumber()) != '555'">...</button>
+	 
+	<!-- function expression -->
+	<div data-bind="click: function (data) { myFunction('param1', data) }">...</div>
+	 
+	<!-- object literal (with unquoted and quoted property names) -->
+	<div data-bind="with: {emotion: 'happy', 'facial-expression': 'smile'}">...</div>
+
+这些示例显示了值可以是几乎任何 JavaScript 表达式。当被包含在花括号、方括号或括号里面时，
+甚至逗号都是有效的。当值是一个对象字面量时，对象的属性名必须是一个有效的 JavaScript 标识符
+或被引号括起。
+如果绑定值是一个无效表达式或引用是未知变量时，Knockout 将输出一个错误并停止处理绑定。
+
+###### 空白符
+
+绑定可以包含任何数量的空白符(空格、制表符或换行符)，因此你可以随意使用来安排你的绑定。
+下述示例是等价的：
+
+	<!-- no spaces -->
+	<select data-bind="options:availableCountries,optionsText:'countryName',value:selectedCountry,optionsCaption:'Choose...'"></select>
+	 
+	<!-- some spaces -->
+	<select data-bind="options : availableCountries, optionsText : 'countryName', value : selectedCountry, optionsCaption : 'Choose...'"></select>
+	 
+	<!-- spaces and newlines -->
+	<select data-bind="
+		options: availableCountries,
+		optionsText: 'countryName',
+		value: selectedCountry,
+		optionsCaption: 'Choose...'"></select>
+
+###### 跳过绑定值
+
+从 Knockout 3.0 开始，你可以指定不带值得绑定，这将给绑定一个 `undefined` 值。如下：
+
+
+这一点在使用 [绑定预处理][binding-preprocessing] 时非常有用，
+它可以给一个绑定赋予一个默认值。
+
+#### 绑定上下文 [binding-context]
+
+_绑定上下文_ 是一个持有你可以在绑定中所引用的数据的对象。
+在应用绑定时，Knockout 会自动创建并管理绑定上下文的层级关系。
+该层级的根指向你所提供给 `ko.applyBindings(viewModel)` 的 `viewModel` 参数。
+然后，每当你使用某个控制流绑定如 `with` 或 `foreach` 时，它都会创建一个子绑定上下文
+以指向内嵌的视图模型数据。
+
+绑定上下文提供了以下特殊属性，你可以在任何绑定中引用它们：
+
+* `$parent`
+
+这是当前上下文外的直接父上下文中的视图模型对象。根上下文中，它是 `undefined`。
+
+* `$parents`
+
+表示所有父视图模型的数组；`$parents[0]` 是父上下文的视图模型，等等。
+
+* `$root`
+
+根上下文中的主数据模型对象。它通常是传递给 `ko.applyBindings(viewModel)` 的对象。
+它等价于 `$parents[$parents.length - 1]`。
+
+* `$data`
+
+当前上下文中的视图模型对象。根上下文中，`$data` 和 `$root` 是等价的。
+在内嵌的绑定上下文中，该参数将被设为当前的数据项。`$data` 在你想引用视图模型本身，
+而不是视图模型的抖个属性时非常有用。
+
+* `$index` (仅在 `foreach` 绑定中可用)
+
+`foreach` 绑定所渲染的当前数组实体的基于 0 的索引。不像其他绑定上下文属性，
+`$index` 是一个 Observable 且在项的索引改变时随之更新(如项被从数组上添加或移除)。
+
+* `$parentContext`
+
+它指向父级的绑定上下文对象。它和指向父级的数据(不是绑定上下文)的 `$parent` 不同。
+它在，例如你需要从内部上下文中访问外部 `foreach` 项的索引(`$parentContext.$index`)很有用。
+在根上下文中，它是 `undefiend`。
+
+* `$rawData`
+
+这是当前上下文中的原始的视图模型值。
+通常它和 `$data` 是相同的，但如果提供给 Knockout 的视图模型被封装为一个 Observable ，
+`$data` 将是未封装的视图模型，而 `$rawData` 将是 Observable 本身。
+
+以下特殊变量在绑定中也可用，但不属于绑定上下文对象：
+
+* `$context`
+
+它指向当前绑定上下文对象。这在你希望访问上下文的属性而它们也存在于视图对象时，
+或你希望将上下文对象传递给视图模型的某个帮助方法时会很有用。
+
+* `$element`
+
+这是当前绑定的 DOM 元素对象 (对虚拟元素，它是注释 DOM 对象)。
+这在绑定需要访问当前元素的某个属性时很有用。如：
+
+	<div id="item1" data-bind="text: $element.id"></div>
+
+##### 在自定义绑定中控制或修改绑定上下文
+
+和内建的 `with` 和 `foreach` 一样，自定义绑定可以改变其后代元素的上下文或
+通过扩展绑定上下文对象来提供特殊属性。
+这在 [创建控制后代绑定的自定义绑定][custom-bindings-controlling-descendant-bindings]
+中有细节描述。
+
 ### 创建自定义绑定
 
 ## 其他技术
