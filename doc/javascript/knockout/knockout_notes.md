@@ -463,5 +463,161 @@ _绑定上下文_ 是一个持有你可以在绑定中所引用的数据的对�
 ### 创建自定义绑定
 
 ## 其他技术
+
+### 加载和保存 JSON 数据
+
+### 扩展 Observables
+
+Knockout Observables 提供了基本的必要特性来支持读/写值并在值变更时通知订阅者。
+然而，有时候你可能希望给 Observable 添加额外的功能。
+它可能包含给 Observable 添加额外的属性或者通过在 Observable 前放置一个 Computed Observable
+来拦截写入。Knockout 扩展器提供了一种简单灵活的方式来做对 Observable 的这种类型的增强。
+
+#### 如何创建扩展器
+
+创建扩展器涉及给 `ko.extenders` 对象添加一个函数。
+该函数接收 Observable 本身作为其第一个参数以及任何选项作为第二个参数。
+它可以返回该 Observable 或者返回诸如一个以某种方式使用原始 Observable 的
+新的 Computed Observable 这样的东西。
+
+下面这个简单的 `logChange` 扩展器订阅了 Observable 并向控制台写入任何带有配置消息的变更。
+
+	ko.extenders.logChange = function(target, option) {
+		target.subscribe(function(newValue) {
+		   console.log(option + ": " + newValue);
+		});
+		return target;
+	};
+
+你将通过调用 Observable 上的 `extend` 函数并传入一个包含 `logChange` 属性的对象
+来使用这个扩展器。
+
+	this.firstName = ko.observable("Bob").extend({logChange: "first name"});
+
+#### 示例1： 强制输入框为数字
+
+视图源码：
+
+	<p><input data-bind="value: myNumberOne" /> (round to whole number)</p>
+	<p><input data-bind="value: myNumberTwo" /> (round to two decimals)</p>
+
+视图模型源码：
+
+	ko.extenders.numeric = function(target, precision) {
+		//create a writeable computed observable to intercept writes to our observable
+		var result = ko.computed({
+			read: target,  //always return the original observables value
+			write: function(newValue) {
+				var current = target(),
+					roundingMultiplier = Math.pow(10, precision),
+					newValueAsNum = isNaN(newValue) ? 0 : parseFloat(+newValue),
+					valueToWrite = Math.round(newValueAsNum * roundingMultiplier) / roundingMultiplier;
+	 
+				//only write if it changed
+				if (valueToWrite !== current) {
+					target(valueToWrite);
+				} else {
+					//if the rounded value is the same, but a different value was written, force a notification for the current field
+					if (newValue !== current) {
+						target.notifySubscribers(valueToWrite);
+					}
+				}
+			}
+		}).extend({ notify: 'always' });
+	 
+		//initialize with current value to make sure it is rounded appropriately
+		result(target());
+	 
+		//return the new computed observable
+		return result;
+	};
+	 
+	function AppViewModel(one, two) {
+		this.myNumberOne = ko.observable(one).extend({ numeric: 0 });
+		this.myNumberTwo = ko.observable(two).extend({ numeric: 2 });
+	}
+	 
+	ko.applyBindings(new AppViewModel(221.2234, 123.4525));
+
+注意，这里要从 UI 上自动清除错误值，在 Computed Observable 上
+使用 `.extend({ notify: 'always' })` 是必要的。
+没有这个的话，用户可能输入一个无效的 `newValue` 但舍入时给出了一个没变的 `valueToWrite`。
+然后，鉴于模型的值将不会改变，UI 上的文本框也就没有通知其更新了。
+使用 `{ notify: 'always' }` 致使文本框进行更新(清除错误值)，即使计算的属性的值没有变。
+
+#### 示例2：给 Observable 添加验证
+
+本例创建了一个扩展器使得一个 Observable 可标记为 required。
+取代返回一个新的对象，这里简单地直接在已有的 Observable 上添加额外的子 Observables。
+因为 Observables 是函数，它们可以有自己的属性。然而，当视图模型被转换为 JSON 时，
+子 Observables 将被丢弃，而我们将简单的只得到实际 Observable 的值。
+这种是非常适合于添加仅和 UI 相关而不需要发送回服务器的额外功能的方式。
+
+视图源码：
+
+	<p data-bind="css: { error: firstName.hasError }">
+		<input data-bind='value: firstName, valueUpdate: "afterkeydown"' />
+		<span data-bind='visible: firstName.hasError, text: firstName.validationMessage'> </span>
+	</p>
+	<p data-bind="css: { error: lastName.hasError }">
+		<input data-bind='value: lastName, valueUpdate: "afterkeydown"' />
+		<span data-bind='visible: lastName.hasError, text: lastName.validationMessage'> </span>
+	</p>
+
+视图模型源码：
+
+	ko.extenders.required = function(target, overrideMessage) {
+		//add some sub-observables to our observable
+		target.hasError = ko.observable();
+		target.validationMessage = ko.observable();
+	 
+		//define a function to do validation
+		function validate(newValue) {
+		   target.hasError(newValue ? false : true);
+		   target.validationMessage(newValue ? "" : overrideMessage || "This field is required");
+		}
+	 
+		//initial validation
+		validate(target());
+	 
+		//validate whenever the value changes
+		target.subscribe(validate);
+	 
+		//return the original observable
+		return target;
+	};
+	 
+	function AppViewModel(first, last) {
+		this.firstName = ko.observable(first).extend({ required: "Please enter a first name" });
+		this.lastName = ko.observable(last).extend({ required: "" });
+	}
+	 
+	ko.applyBindings(new AppViewModel("Bob","Smith"));
+
+#### 应用多个扩展器
+
+可以在调用 Observable 的 `.extend` 方法时一次应用多个扩展器：
+
+	this.firstName = ko.observable(first).extend({ required: "Please enter a first name", logChange: "first name" });
+
+### `throttle` 扩展器
+
+### 不唐突的事件处理
+
+### 使用 `fn` 来添加自定义函数
+
+### 扩展 Knockout 的绑定语法
+
 ## 插件
+
+### `mapping` 插件
+
 ## 其他信息
+
+### 浏览器支持
+
+### 获取帮助
+
+### 教程 & 示例链接
+
+### 使用 RequireJs 的 AMD 用例
