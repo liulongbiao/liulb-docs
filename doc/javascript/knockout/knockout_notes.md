@@ -602,7 +602,27 @@ Knockout Observables 提供了基本的必要特性来支持读/写值并在值�
 
 ### `throttle` 扩展器
 
+通常，Computed Observables 会在任何依赖改变时被同步地重求值。
+而 `throttle` 扩展器会致使 Computed Observable 延迟其重求值直到其依赖在某个指定
+时间段内没有改变。被节流的 Computed Observable 因此是异步更新的。
+
+节流的主要的使用场景：
+
+* 让事物在某个延迟后响应
+* 将多个变更整合到单个重求值中(所谓 "原子更新")
+
 ### 不唐突的事件处理
+
+大多数时候， `data-bind` 属性提供了一种清晰简洁的方式来绑定视图模型。
+然而，事件处理是可能导致啰嗦的 `data-bind` 属性的地方，因为通常匿名函数是传参的
+推荐方式。
+
+作为替代，Knockout 提供了两个帮助函数允许你标识 DOM 元素上关联的数据：
+
+* `ko.dataFor(element)` 返回在元素上绑定的可用的数据
+* `ko.contextFor(element)` 返回在元素上可用的整个绑定上下文
+
+这些帮助函数可用在像 jQuery 的 `bind` 或 `click` 这样非唐突地附着的事件处理器中。
 
 ### 使用 `fn` 来添加自定义函数
 
