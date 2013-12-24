@@ -649,6 +649,70 @@ Knockout Observables 提供了基本的必要特性来支持读/写值并在值�
 
 ### 扩展 Knockout 的绑定语法
 
+_注：这是一个高级的技术，通常仅用于在创建可重用的绑定或扩展语法的时候。
+通常使用 Knockout 构建应用时并不需要。_
+
+从 Knockout 3.0 开始，开发者可通过提供在重写 DOM 节点及绑定过程中的绑定字符串的回调
+来定义自定义语法。
+
+#### 预处理绑定字符串
+
+你可以通过给特定绑定处理器 (如 click、visible 或任何自定义绑定处理器) 
+提供一个 _绑定预处理器_ 来挂到 Knockout 用于解释 `data-bind` 属性的逻辑上。
+
+要这么做，需添加一个 `preprocess` 函数到绑定处理器上：
+
+	ko.bindingHandlers.yourBindingHandler.preprocess = function(stringFromMarkup) {
+		// Return stringFromMarkup if you don't want to change anything, or return
+		// some other string if you want Knockout to behave as if that was the
+		// syntax provided in the original HTML
+	}
+
+##### 参考
+
+* `ko.bindingHandlers.<name>.preprocess(value, name, addBindingCallback)`<br/>
+定义了以后，该函数在每次 `<name>` 绑定求值前被调用。
+
+参数:
+
+** `value`：Knockout 试图解析前的语法关联的绑定值
+** `name`：绑定名称
+** `addBinding`：可选的可用来给当前元素插入其他绑定的回调函数。<br/>
+需要 `name` 和 `value`两个参数。
+
+返回值：
+
+你的 `preprocess` 函数必须返回需被解析并传递给绑定的新字符串值，
+或者返回 `undefiend` 移除绑定。不要返回非字符串值。
+
+#### 预处理 DOM 节点
+
+你可以通过提供一个 _节点预处理器_ 挂到 Knockout 的遍历 DOM 的逻辑上。
+这是一个 Knockout 将为每个它所经过的 DOM 节点调用一次的函数，
+不论是在 UI 第一次绑定时，还是随后任何新的 DOM 子树被注入时 (如，通过 `foreach` 绑定)。
+
+要这么做，定义一个 `proprocessNode` 函数到你的绑定提供器上：
+
+	ko.bindingProvider.instance.preprocessNode = function(node) {
+		// Use DOM APIs such as setAttribute to modify 'node' if you wish.
+		// If you want to leave 'node' in the DOM, return null or have no 'return' statement.
+		// If you want to replace 'node' with some other set of nodes,
+		//    - Use DOM APIs such as insertChild to inject the new nodes
+		//      immediately before 'node'
+		//    - Use DOM APIs such as removeChild to remove 'node' if required
+		//    - Return an array of any new nodes that you've just inserted
+		//      so that Knockout can apply any bindings to them
+	}
+
+##### 参考
+
+* `ko.bindingProvider.instance.preprocessNode(node)`
+
+定义后，该函数将在每个 DOM 节点绑定处理前被调用。
+该函数可以修改、移除或替换 `node`。
+任何新的节点必须紧邻 `node` 前面插入，且如果任何节点被添加或 `node` 被移除，
+该函数必须返回一个替换当前 `node` 节点在文档中的位置的新节点的数组。
+
 ## 插件
 
 ### `mapping` 插件
