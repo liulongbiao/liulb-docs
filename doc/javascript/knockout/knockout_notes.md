@@ -626,6 +626,27 @@ Knockout Observables 提供了基本的必要特性来支持读/写值并在值�
 
 ### 使用 `fn` 来添加自定义函数
 
+有时，你可能会发现需要给 Knockout 的核心值类型添加新功能来流化你的代码。
+你可以在任何以下类型上定义自定义函数：
+
+![](http://knockoutjs.com/documentation/images/fn/type-hierarchy.png)
+
+因为继承性，如果你给 `ko.subscribable` 添加了函数，对所有其他类型也可用。
+如果你给 `ko.observable` 添加函数，它将被 `ko.observableArray` 继承，
+而 `ko.computed` 则不可用。
+
+要添加一个自定义函数，将其添加到以下扩展点：
+
+* `ko.subscribable.fn`
+* `ko.observable.fn`
+* `ko.observableArray.fn`
+* `ko.computed.fn`
+
+然后，你的自定义函数对所有该类型该点之后所创建的值都可用。
+
+> **注：** 这些扩展点最好仅用于确实可适用于大范围的场景的自定义函数。
+> 对仅计划使用一次的函数，你不需要将其添加到这些命名空间上。
+
 ### 扩展 Knockout 的绑定语法
 
 ## 插件
