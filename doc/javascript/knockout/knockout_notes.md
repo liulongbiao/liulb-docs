@@ -675,9 +675,9 @@ _注：这是一个高级的技术，通常仅用于在创建可重用的绑定�
 
 参数:
 
-** `value`：Knockout 试图解析前的语法关联的绑定值
-** `name`：绑定名称
-** `addBinding`：可选的可用来给当前元素插入其他绑定的回调函数。<br/>
+  * `value`：Knockout 试图解析前的语法关联的绑定值
+  * `name`：绑定名称
+  * `addBinding`：可选的可用来给当前元素插入其他绑定的回调函数。<br/>
 需要 `name` 和 `value`两个参数。
 
 返回值：
@@ -715,7 +715,70 @@ _注：这是一个高级的技术，通常仅用于在创建可重用的绑定�
 
 ## 插件
 
-### `mapping` 插件
+### mapping 插件
+
+Knockout 被设计为可使用任何 JavaScript 对象作为视图模型。
+只要视图模型的某些属性是 Observable ，你可以使用 KO 将其绑定到 UI 上，
+然后 UI 就会在任何该 Observable 属性改变时自动更新。
+
+多数应用需要从后台服务器获取数据。鉴于服务器没有任何 Observale 的概念，
+它仅会提供一个纯 JavaSctipt 对象 (常序列化为 JSON)。
+mapping 插件给了你一种直观的方式将纯 JavaSctipt 对象映射为
+带有合适的 Observales 的视图模型。这是一个手动书写代码将从服务器获取的数据
+构造出视图模型的替代方案。
+
+#### 使用
+
+要通过 mapping 插件创建视图模型，使用 `ko.mapping.fromJS` 来替换手动创建：
+
+	var viewModel = ko.mapping.fromJS(data);
+
+它会给每个 `data` 上的属性创建 Observable 属性。
+然后每次从服务器接收新数据时，你可以通过再次调用 `ko.mapping.fromJS` 函数
+一步更新所有 `viewModel` 上的属性。
+
+	// Every time data is received from the server:
+	ko.mapping.fromJS(data, viewModel);
+
+#### 如何映射
+
+* 所有对象上的属性被转换成一个 Observable。
+如果一个更新将改变其值，它将更新该 Observable。
+* 数组被转换成 Observable 数组。
+如果一个更新将改变项的数量，它将执行相应的 `add/remove` 动作。
+它也会视图保持和原始 JavaScript 数组相同的顺序。
+
+#### 解映射
+
+如果想将映射的对象转换回常规的 JS 对象，使用：
+
+	var unmapped = ko.mapping.toJS(viewModel);
+
+它将创建一个仅包含映射对象上属于原始 JS 对象的属性的解映射对象。
+或者说，任何手动添加到视图模型上的属性或函数都被忽略。
+默认情况下，仅有 `_destroy` 属性是个例外，它将被映射回去，因为这是 Knockout 
+在从一个 `ko.obserableArray` 上销毁一个项时可能生成的属性。
+详见 [高级用法][mapping-advanced] 中相关配置细节。
+
+#### 使用 JSON 字符串
+
+如果 Ajax 调用返回的是 JSON 字符串，`ko.mapping.fromJSON` 是相应的操作。
+
+#### 高级用法 [mapping-advanced]
+
+有时需要对如何映射做更多必要的控制。这通过 _映射选项_ 来完成。
+它们可在 `ko.mapping.fromJS` 的调用中指定。随后的调用，你不需要再指定它们。
+
+##### 使用 "keys" 唯一标识对象
+##### 使用 "create" 自定义对象构建
+##### 使用 "update" 自定义对象更新
+##### 使用 "ignore" 忽略特定属性
+##### 使用 "include" 包含特定属性
+##### 使用 "copy" 拷贝特定属性
+##### 使用 "observe" 仅观察特定属性
+##### 指定更新目标
+##### 从多个来源映射
+##### 映射的 Observable 数组
 
 ## 其他信息
 
